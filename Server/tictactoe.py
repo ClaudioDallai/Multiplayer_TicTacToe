@@ -3,6 +3,9 @@ import struct
 import sys
 import time
 
+LOWER_COMMAND = 0
+UPPER_COMMAND = 5
+
 COMMAND_JOIN = 0
 COMMAND_CHALLENGE = 1
 COMMAND_MOVE = 2
@@ -19,7 +22,7 @@ class Room:
         self.reset()
 
     def is_door_open(self):
-        return self.challenger is None
+        return self.challenger is None and self.winner is None and self.draw is False
 
     def has_started(self):
         for cell in self.playfield:
@@ -28,12 +31,12 @@ class Room:
         return False
 
     def print_symbol(self, cell):
-        player = self.playfield[cell]
-        if not player:
+        current_player = self.playfield[cell]
+        if not current_player:
             return " "
-        if player == self.owner:
+        if current_player == self.owner:
             return "X"
-        if player == self.challenger:
+        if current_player == self.challenger:
             return "O"
         else:
             return "?"
@@ -60,6 +63,7 @@ class Room:
         self.playfield = [None] * 9
         self.turn = self.owner
         self.winner = None
+        self.draw = False
 
     def check_horizontal(self, row):
         for col in range(0, 3):
@@ -118,6 +122,12 @@ class Room:
         if winner:
             return winner
         return self.check_diagonal_right()
+    
+    def check_draw(self):
+        for cell in self.playfield:
+            if cell is None:
+                return False
+        return True
 
     def move(self, player, cell):
         if cell < 0 or cell > 8:
@@ -125,6 +135,8 @@ class Room:
         if self.playfield[cell] is not None:
             return False
         if self.winner:
+            return False
+        if self.draw:
             return False
         if self.challenger is None:
             return False
@@ -136,6 +148,7 @@ class Room:
             return False
         self.playfield[cell] = player
         self.winner = self.check_victory()
+        self.draw = self.check_draw()
         self.turn = self.challenger if self.turn == self.owner else self.owner
         return True
 
@@ -153,9 +166,17 @@ class Server:
     def __init__(self, address, port):
         self.players = {}
         self.rooms = {}
-        self.room_counter = 100
+        self.room_counter = 0
         self.address = address
         self.port = port
+        self.server_clientactions_resolution = {
+            COMMAND_JOIN: self.command_join_resolution,
+            COMMAND_CHALLENGE: self.command_challenge_resolution,
+            COMMAND_MOVE: self.command_move_resolution,
+            COMMAND_QUIT: self.command_quit_resolution,
+            COMMAND_CREATE_ROOM: self.command_create_room_resolution,
+        }
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.settimeout(1)
         self.socket.bind((address, port))
@@ -194,6 +215,102 @@ class Server:
         del self.players[sender]
         print("Player {} removed".format(player.name))
 
+# From Client commands resolution
+    def command_join_resolution(self, packet, sender):
+        if len(packet) == 28:
+            if sender in self.players:
+                print("{} has already joined!".format(sender))
+                self.kick(sender)
+                return
+            self.players[sender] = Player(packet[8:28])
+            print(
+                "player {} joined from {} [{} players on server]".format(
+                    self.players[sender].name, sender, len(self.players)
+                )
+            )
+            return
+        
+    def command_create_room_resolution(self, packet, sender):
+        if len(packet) == 8:
+            if sender not in self.players:
+                print("Unknown player {}".format(sender))
+                return
+            player = self.players[sender]
+            if player.room:
+                print("Player {} ({}) already has a room".format(sender, player.name))
+                return
+            
+            player.room = Room(self.room_counter, player)
+            self.rooms[self.room_counter] = player.room
+            print(
+                "Room {} for player {} ({}) created".format(
+                    self.room_counter, sender, player.name
+                )
+            )
+            self.room_counter += 1
+            player.last_packet_ts = time.time()
+            return
+        
+    def command_challenge_resolution(self, packet, sender):
+        if len(packet) == 12:
+            if sender not in self.players:
+                print("Unknown player {}".format(sender))
+                return
+            player = self.players[sender]
+            if player.room:
+                print(
+                    "Player {} ({}) already in a room".format(sender, player.name)
+                )
+                return
+            (room_id,) = struct.unpack("<I", packet[8:12])
+            if room_id not in self.rooms:
+                print("Unknown room {}".format(room_id))
+                return
+            room = self.rooms[room_id]
+            if not room.is_door_open():
+                print("Room {} is closed!".format(room_id))
+                return
+            
+            room.challenger = player
+            player.room = room
+            player.last_packet_ts = time.time()
+            print("Game on room {} started!".format(room_id))
+            return
+
+    def command_move_resolution(self, packet, sender):
+        if len(packet) == 12:
+            if sender not in self.players:
+                print("Unknown player {}".format(sender))
+                return
+            player = self.players[sender]
+            if not player.room:
+                print("Player {} ({}) is not in a room".format(sender, player.name))
+                return
+            (cell,) = struct.unpack("<I", packet[8:12])
+            if not player.room.move(player, cell):
+                print("player {} did an invalid move!".format(player.name))
+                return
+            
+            player.last_packet_ts = time.time()
+            player.room.print_playfield()
+            if player.room.winner:
+                print("player {} did WON!".format(player.room.winner.name))
+                player.room.reset()
+                return
+            if player.room.draw:
+                print("Room {} ended in draw!".format(player.room.room_id))
+                player.room.reset()
+                return
+    
+    def command_quit_resolution(self, packet, sender):
+        if len(packet) == 8:
+            if sender not in self.players:
+                print("Unknown player {}".format(sender))
+                return
+            self.remove_player(sender)
+            return
+        
+
     def tick(self):
         try:
             packet, sender = self.socket.recvfrom(64)
@@ -203,93 +320,20 @@ class Server:
                 print("invalid packet size: {}".format(len(packet)))
                 return
             rid, command = struct.unpack("<II", packet[0:8])
-            if command == COMMAND_JOIN and len(packet) == 28:
-                if sender in self.players:
-                    print("{} has already joined!".format(sender))
-                    self.kick(sender)
-                    return
-                self.players[sender] = Player(packet[8:28])
-                print(
-                    "player {} joined from {} [{} players on server]".format(
-                        self.players[sender].name, sender, len(self.players)
-                    )
-                )
-                return
-            elif command == COMMAND_CREATE_ROOM:
-                if sender not in self.players:
-                    print("Unknown player {}".format(sender))
-                    return
-                player = self.players[sender]
-                if player.room:
-                    print(
-                        "Player {} ({}) already has a room".format(sender, player.name)
-                    )
-                    return
-                player.room = Room(self.room_counter, player)
-                self.rooms[self.room_counter] = player.room
-                print(
-                    "Room {} for player {} ({}) created".format(
-                        self.room_counter, sender, player.name
-                    )
-                )
-                self.room_counter += 1
-                player.last_packet_ts = time.time()
-                return
-            elif command == COMMAND_CHALLENGE and len(packet) == 12:
-                if sender not in self.players:
-                    print("Unknown player {}".format(sender))
-                    return
-                player = self.players[sender]
-                if player.room:
-                    print(
-                        "Player {} ({}) already in a room".format(sender, player.name)
-                    )
-                    return
-                (room_id,) = struct.unpack("<I", packet[8:12])
-                if room_id not in self.rooms:
-                    print("Unknown room {}".format(room_id))
-                    return
-                room = self.rooms[room_id]
-                if not room.is_door_open():
-                    print("Room {} is closed!".format(room_id))
-                    return
-                room.challenger = player
-                player.room = room
-                player.last_packet_ts = time.time()
-                print("Game on room {} started!".format(room_id))
-                return
-            elif command == COMMAND_MOVE and len(packet) == 12:
-                if sender not in self.players:
-                    print("Unknown player {}".format(sender))
-                    return
-                player = self.players[sender]
-                if not player.room:
-                    print("Player {} ({}) is not in a room".format(sender, player.name))
-                    return
-                (cell,) = struct.unpack("<I", packet[8:12])
-                if not player.room.move(player, cell):
-                    print("player {} did an invalid move!".format(player.name))
-                    return
-                player.last_packet_ts = time.time()
-                player.room.print_playfield()
-                if player.room.winner:
-                    print("player {} did WON!".format(player.room.winner.name))
-                    player.room.reset()
-                    return
-            elif command == COMMAND_QUIT:
-                if sender not in self.players:
-                    print("Unknown player {}".format(sender))
-                    return
-                self.remove_player(sender)
-                return
-            else:
-                print("unknown command from {}".format(sender))
+
+            if command < LOWER_COMMAND or command > UPPER_COMMAND:
+                raise Exception("Invalid {} command received".format(command))
+
+            self.server_clientactions_resolution[command](packet, sender)
+           
         except TimeoutError:
+            return
+        except socket.timeout:
             return
         except KeyboardInterrupt:
             sys.exit(1)
         except:
-            #print(sys.exc_info())
+            print(sys.exc_info())
             return
 
     def announces(self):
