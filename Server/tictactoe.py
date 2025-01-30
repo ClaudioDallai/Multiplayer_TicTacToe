@@ -215,7 +215,7 @@ class Server:
         del self.players[sender]
         print("Player {} removed".format(player.name))
 
-# From Client commands resolution
+# From Client - commands resolution
     def command_join_resolution(self, packet, sender):
         if len(packet) == 28:
             if sender in self.players:

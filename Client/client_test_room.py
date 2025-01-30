@@ -5,8 +5,8 @@ import sys
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.settimeout(3.0)
 
-message_join_server = struct.pack('<II', 0, 8888) + b'ClaudioDallai\0\0\0\0\0\0\0'
-messagge_create_room = struct.pack('<II', 0, 777)
+message_join_server = struct.pack('<II', 0, 0) + b'ClaudioDallai\0\0\0\0\0\0\0'
+messagge_create_room = struct.pack('<II', 0, 4)
 #messagge_challenge_room = struct.pack('<III', 0, 1, sys.argv[1])
 
 s.sendto(message_join_server, ('127.0.0.1', 9999))
