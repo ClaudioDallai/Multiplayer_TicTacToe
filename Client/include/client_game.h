@@ -4,7 +4,12 @@
 
 #include "socket_guard.h"
 
-
+// Clients commands (same as Server)
+#define COMMAND_JOIN 0
+#define COMMAND_CREATE_ROOM 1
+#define COMMAND_CHALLENGE 2
+#define COMMAND_MOVE 3
+#define COMMAND_QUIT 4
 
 typedef enum game_state
 {
@@ -32,6 +37,8 @@ void play_draw(void);
 void load_assets(void);
 
 void internal_reset_pressed_buttons(void);
+
+void join_server(void);
 
 
 #endif

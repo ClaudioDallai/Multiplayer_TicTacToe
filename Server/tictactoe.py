@@ -219,7 +219,7 @@ class Server:
 
 # From Client - commands resolution
     def command_join_resolution(self, packet, sender):
-        if len(packet) == 28:
+        if len(packet) == 25:
             if sender in self.players:
                 print("{} has already joined!".format(sender))
                 self.kick(sender)
@@ -321,7 +321,7 @@ class Server:
             if len(packet) < 8:
                 print("invalid packet size: {}".format(len(packet)))
                 return
-            rid, command = struct.unpack("<II", packet[0:8])
+            (command,) = struct.unpack("<I", packet[0:4]) # Da modificare recezione messaggio. Scegliere una nuova standardizzazione rispetto a quella di partenza
 
             if command < LOWER_COMMAND_VALUE or command > UPPER_COMMAND_VALUE:
                 raise Exception("Invalid {} command received".format(command))

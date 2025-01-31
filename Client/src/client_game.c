@@ -1,8 +1,11 @@
 // Include
 #include "client_game.h"
 #include "raylib.h"
+
 #include "stdlib.h"
 #include "stdio.h"
+#include "stdint.h"
+#include "string.h"
 
 // Vars
 const int screen_width = 800;
@@ -189,7 +192,22 @@ void connection_process_input(void)
     if (IsKeyPressed(KEY_ENTER) && ip_index > 8 && port_index > 0 && player_name_index > 0) 
     {
         // join server
+        if (create_socket(ip_address, atoi(port)))
+        {
+            printf("Socket creation failed\n");
+        }
+
+        join_server();
     }
+}
+
+void join_server(void)
+{
+    char buffer[25] = {0}; 
+    uint32_t join_command = COMMAND_JOIN;
+    memcpy(buffer, &join_command, sizeof(join_command));
+    memcpy(buffer + sizeof(join_command), player_name, sizeof(player_name)); 
+    send_packet(buffer, sizeof(buffer));
 }
 
 void connection_draw(void)

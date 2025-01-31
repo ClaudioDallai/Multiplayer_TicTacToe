@@ -16,7 +16,7 @@
 int s = -1;
 struct sockaddr_in send_sin;
 
-int initialize_socket(const char* address, const int port)
+int create_socket(const char* address, const int port)
 {
     #ifdef _WIN32
         // this part is only required on Windows: it initializes the Winsock2 dll
