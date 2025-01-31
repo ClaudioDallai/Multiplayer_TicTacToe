@@ -3,8 +3,8 @@ import struct
 import sys
 import time
 
-LOWER_COMMAND = 0
-UPPER_COMMAND = 5
+LOWER_COMMAND_VALUE = 0
+UPPER_COMMAND_VALUE = 5
 
 COMMAND_JOIN = 0
 COMMAND_CHALLENGE = 1
@@ -12,6 +12,8 @@ COMMAND_MOVE = 2
 COMMAND_QUIT = 3
 COMMAND_CREATE_ROOM = 4
 COMMAND_ANNOUNCE_ROOM = 5
+
+KICK_TIME = 120
 
 
 class Room:
@@ -294,7 +296,7 @@ class Server:
             player.last_packet_ts = time.time()
             player.room.print_playfield()
             if player.room.winner:
-                print("player {} did WON!".format(player.room.winner.name))
+                print("player {} from room {} did WON!".format(player.room.winner.name, player.room.room_id))
                 player.room.reset()
                 return
             if player.room.draw:
@@ -321,7 +323,7 @@ class Server:
                 return
             rid, command = struct.unpack("<II", packet[0:8])
 
-            if command < LOWER_COMMAND or command > UPPER_COMMAND:
+            if command < LOWER_COMMAND_VALUE or command > UPPER_COMMAND_VALUE:
                 raise Exception("Invalid {} command received".format(command))
 
             self.server_clientactions_resolution[command](packet, sender)
@@ -359,7 +361,7 @@ class Server:
         dead_players = []
         for sender in self.players:
             player = self.players[sender]
-            if now - player.last_packet_ts > 30:
+            if now - player.last_packet_ts > KICK_TIME:
                 dead_players.append(sender)
 
         for sender in dead_players:

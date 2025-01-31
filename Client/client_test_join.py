@@ -7,11 +7,11 @@ s.settimeout(3.0)
 
 message_join_server = struct.pack('<II', 0, 0) + b'ClaudioDallaz\0\0\0\0\0\0\0'
 #messagge_create_room = struct.pack('<II', 0, 4)
-messagge_challenge_room = struct.pack('<III', 0, 55, int(sys.argv[1]))
+messagge_challenge_room = struct.pack('<III', 0, 1, int(sys.argv[1]))
 
 s.sendto(message_join_server, ('127.0.0.1', 9999))
 #s.sendto(messagge_create_room, ('127.0.0.1', 9999))
-#s.sendto(messagge_challenge_room, ('127.0.0.1', 9999))
+s.sendto(messagge_challenge_room, ('127.0.0.1', 9999))
 
 server_answer = ""
 
