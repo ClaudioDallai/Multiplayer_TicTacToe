@@ -34,7 +34,7 @@ Rectangle port_button = {160.0f, 280.0f, 160.0f, 30.0f};
 char player_name[MAX_PLAYER_LENGTH + 1] = {0};
 int player_name_index = 0;
 int player_text_pressed = 0;
-Rectangle player_name_button = {160.0f, 360.0f, 160.0f, 30.0f};
+Rectangle player_name_button = {160.0f, 350.0f, 160.0f, 30.0f};
 
 #define BUTTON_SELECTED WHITE
 #define BUTTON_UNSELECTED RED
@@ -158,12 +158,32 @@ void connection_process_input(void)
 
     if (port_text_pressed)
     {
-
+        if (port_index < MAX_PORT_LENGTH && (key >= 48 && key <= 57))
+        {
+            port[port_index] = (char)key;
+            port_index++;
+            port[port_index] = '\0';
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && port_index > 0) 
+        {
+            port_index--;
+            port[port_index] = '\0';
+        }
     }
 
     if (player_text_pressed)
     {
-
+        if (player_name_index < MAX_PLAYER_LENGTH && key != 0)
+        {
+            player_name[player_name_index] = (char)key;
+            player_name_index++;
+            player_name[player_name_index] = '\0';
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && player_name_index > 0) 
+        {
+            player_name_index--;
+            player_name[player_name_index] = '\0';
+        }
     }
 
     if (IsKeyPressed(KEY_ENTER) && ip_index > 8 && port_index > 0 && player_name_index > 0) 
@@ -195,23 +215,23 @@ void connection_draw(void)
     if (port_text_pressed)
     {
         DrawTextEx(font, "Port: ", (Vector2){160, 280}, 30.0f, 1.0f, BUTTON_SELECTED);
-        DrawTextEx(font, port, (Vector2){250, 280}, 30.0f, 5.0f, BUTTON_SELECTED);
+        DrawTextEx(font, port, (Vector2){260, 280}, 30.0f, 5.0f, BUTTON_SELECTED);
     }
     else
     {
         DrawTextEx(font, "Port: ", (Vector2){160, 280}, 30.0f, 1.0f, BUTTON_UNSELECTED);
-        DrawTextEx(font, port, (Vector2){250, 280}, 30.0f, 5.0f, BUTTON_UNSELECTED);
+        DrawTextEx(font, port, (Vector2){260, 280}, 30.0f, 5.0f, BUTTON_UNSELECTED);
     }
 
     if (player_text_pressed)
     {
-        DrawTextEx(font, "Player Name: ", (Vector2){160, 360}, 30.0f, 1.0f, BUTTON_SELECTED);
-        DrawTextEx(font, player_name, (Vector2){250, 360}, 30.0f, 5.0f, BUTTON_SELECTED);
+        DrawTextEx(font, "Player Name: ", (Vector2){160, 350}, 30.0f, 1.0f, BUTTON_SELECTED);
+        DrawTextEx(font, player_name, (Vector2){380, 350}, 30.0f, 5.0f, BUTTON_SELECTED);
     }
     else
     {
-        DrawTextEx(font, "Player Name: ", (Vector2){160, 360}, 30.0f, 1.0f, BUTTON_UNSELECTED);
-        DrawTextEx(font, player_name, (Vector2){250, 360}, 30.0f, 5.0f, BUTTON_UNSELECTED);
+        DrawTextEx(font, "Player Name: ", (Vector2){160, 350}, 30.0f, 1.0f, BUTTON_UNSELECTED);
+        DrawTextEx(font, player_name, (Vector2){380, 350}, 30.0f, 5.0f, BUTTON_UNSELECTED);
     }
 
 
