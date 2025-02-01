@@ -66,6 +66,8 @@ int receive_response_package(void);
 void manage_server_join(void);
 void manage_server_quit(void);
 
+void challenge_room(void);
+
 void manage_server_waiting_rooms(void);
 void create_server_room(void);
 void join_server_room(void);
