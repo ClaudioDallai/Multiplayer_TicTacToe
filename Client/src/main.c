@@ -5,13 +5,14 @@ int main (int argc, char **argv)
     game_init();
 
     game_state previos_client_state = current_client_state;
-    on_state_switch(previos_client_state, current_client_state, 1);
+    on_state_switch(previos_client_state, current_client_state, 0);
 
     while (!quit)
     {
         if (previos_client_state != current_client_state)
         {
-            on_state_switch(previos_client_state, current_client_state, 0);
+            on_state_switch(previos_client_state, current_client_state, 1);
+            previos_client_state = current_client_state;
         }
 
         switch (current_client_state)
@@ -23,6 +24,7 @@ int main (int argc, char **argv)
                 break;
 
             case WAITING_ROOM:
+                manage_server_waiting_rooms();
                 waiting_room_process_input();
                 waiting_room_draw();
                 break;
@@ -33,8 +35,6 @@ int main (int argc, char **argv)
             default:
                 break;
         }
-
-        previos_client_state = current_client_state;
     }
 
     game_deinit();

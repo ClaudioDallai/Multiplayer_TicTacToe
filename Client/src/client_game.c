@@ -7,40 +7,42 @@
 #include "stdint.h"
 #include "string.h"
 
-// Vars
+// Const vars
 const int screen_width = 800;
 const int screen_height = 600;
 const int target_fps = 60;
 
+// Resources
 const char* font_path = "./resources/setback.png";
 
-float master_volume_value = 0.5f;
-
+// Client application related vars
 int quit = 0;
 game_state current_client_state = CONNECTION;
 
+float master_volume_value = 0.5f;
 Font font;
 
-#define MAX_IP_LENGTH 15
 char ip_address[MAX_IP_LENGTH + 1] = {0};
 int ip_index = 0;
 int address_text_pressed = 0;
 Rectangle address_button = {160.0f, 210.0f, 160.0f, 30.0f};
 
-#define MAX_PORT_LENGTH 4
 char port[MAX_PORT_LENGTH + 1] = {0};
 int port_index = 0;
 int port_text_pressed = 0;
 Rectangle port_button = {160.0f, 280.0f, 160.0f, 30.0f};
 
-#define MAX_PLAYER_LENGTH 20
 char player_name[MAX_PLAYER_LENGTH + 1] = {0};
 int player_name_index = 0;
 int player_text_pressed = 0;
 Rectangle player_name_button = {160.0f, 350.0f, 160.0f, 30.0f};
 
-#define BUTTON_SELECTED WHITE
-#define BUTTON_UNSELECTED RED
+int create_room_text_pressed = 0;
+int already_in_a_room = 0;
+int client_room_ids[SERVER_MAX_ROOMS] = {0};
+int current_client_created_room_id = -1;
+char room_created_text[64] = {0};
+Rectangle create_room_button = {30.0f, 30.0f, 310.0f, 30.0f};
 
 
 
@@ -56,8 +58,6 @@ void game_init(void)
     SetTargetFPS(target_fps);
 
     load_assets();
-
-    internal_reset_pressed_buttons();
 }
 
 void load_assets(void)
@@ -76,13 +76,17 @@ void game_deinit(void)
 
 // Game Loop
 
-void on_state_switch(const game_state previous_client_state, const game_state current_client_state, const int skip_current)
+void on_state_switch(const game_state previous_client_state, const game_state current_client_state, const int compute_current)
 {
     switch (previous_client_state)
     {
         case CONNECTION:
+            internal_reset_pressed_buttons();
+            // Maybe reset old chars* ...
             break;
         case WAITING_ROOM:
+            create_room_text_pressed = 0;
+           internal_reset_client_ids();
             break;
         case PLAY:
             break;
@@ -90,13 +94,16 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
             break;
     }
 
-    if (!skip_current)
+    if (compute_current)
     {
         switch (current_client_state)
         {
             case CONNECTION:
+                deinit_client();
                 break;
             case WAITING_ROOM:
+                already_in_a_room = 0;
+                internal_reset_client_ids();
                 break;
             case PLAY:
                 break;
@@ -106,7 +113,7 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
     }
 }
 
-int receive_package(void)
+int receive_response_package(void)
 {
     char buffer[64]= {0};
     int bytes_received = receive_packet(buffer, sizeof(buffer));
@@ -155,25 +162,42 @@ void internal_reset_pressed_buttons(void)
     player_text_pressed = 0;
 }
 
+void internal_reset_client_ids(void)
+{
+    for (int i = 0; i < SERVER_MAX_ROOMS; i++)
+        {
+            client_room_ids[i] = 0;
+        }
+}
+
+
 void manage_application_exit(void)
 {
     if (WindowShouldClose())
     {
         if (current_client_state != CONNECTION)
         {
-            // TODO: Avvisa il server prima di chiudere il socket
+            manager_server_quit();
         }
-        
+
         quit = 1;
     }
 }
 
+
+void manager_server_quit(void)
+{
+    char buffer[8] = {0};
+    uint32_t quit_command = COMMAND_QUIT;
+    memcpy(buffer, &quit_command, sizeof(quit_command));
+    send_packet(buffer, sizeof(buffer));
+}
+
 void manage_server_join(void)
 {
-    int server_response = receive_package();
+    int server_response = receive_response_package();
     if (server_response == SERVER_RESPONSE_OK)
     {
-        internal_reset_pressed_buttons();
         current_client_state = WAITING_ROOM;
     }
 }
@@ -273,6 +297,7 @@ void join_server(void)
     send_packet(buffer, sizeof(buffer));
 }
 
+
 void connection_draw(void)
 {
     BeginDrawing();
@@ -319,15 +344,130 @@ void connection_draw(void)
     EndDrawing();
 }
 
+void create_server_room(void)
+{
+    printf("Ask for room creation\n");
+    char buffer[8] = {0}; 
+    uint32_t create_room_command = COMMAND_CREATE_ROOM;
+    memcpy(buffer, &create_room_command, sizeof(create_room_command));
+    memcpy(buffer + sizeof(create_room_command), &create_room_command, sizeof(create_room_command)); 
+    send_packet(buffer, sizeof(buffer));
+}
+
+void manage_server_waiting_rooms(void)
+{
+    char buffer[64]= {0};
+    int bytes_received = receive_packet(buffer, sizeof(buffer));
+    uint32_t command;
+
+    if (bytes_received >= 4)
+    {
+        memcpy(&command, buffer, sizeof(command));
+    }
+
+    if (bytes_received == 4)
+    {
+        printf("Command: %u\n", command);
+
+        switch (command)
+        {
+            case SERVER_RESPONSE_OK:
+                break;
+            case SERVER_RESPONSE_KICK:
+                current_client_state = CONNECTION;
+            default:
+                break;
+        }
+    }
+
+    if(bytes_received == 8) 
+    {
+        printf("Command: %u\n", command);
+
+        uint32_t room_id;
+        memcpy(&room_id, buffer + sizeof(command), sizeof(room_id));
+
+        switch (command)
+        {
+            case SERVER_RESPONSE_ROOM_DESTROYED:
+                already_in_a_room = 0;
+                current_client_created_room_id = -1;
+                printf("Room %u was destroyed!\n", room_id);
+                break;
+            case SERVER_RESPONSE_ROOM_CREATED:
+                already_in_a_room = 1;
+                current_client_created_room_id = room_id;
+                sprintf(room_created_text, "Room %d was created!", room_id);
+                printf("Room %u was created!\n", current_client_created_room_id);
+                internal_reset_client_ids();
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (bytes_received == 44)
+    {
+        printf("Command: %u\n", command);
+
+        if (command == COMMAND_ANNOUNCE_ROOM)
+        {
+           memcpy(client_room_ids, buffer + sizeof(command), sizeof(client_room_ids));
+        }
+    }
+}
+
+
 void waiting_room_process_input(void)
 {
     manage_application_exit();
+
+   if (CheckCollisionPointRec(GetMousePosition(), create_room_button) && !already_in_a_room)
+    {
+        create_room_text_pressed = 1;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        {
+            create_room_text_pressed = 0;
+            create_server_room();
+        }
+    }
+    else
+    {
+        create_room_text_pressed = 0;
+    }
 }
 
 void waiting_room_draw(void)
 {
     BeginDrawing();
     ClearBackground(BLACK);
+
+    if (create_room_text_pressed)
+    {
+        DrawTextEx(font, "| Create New Room |", (Vector2){30.0f, 30.0f}, 30.0f, 1.0f, BUTTON_SELECTED);
+    }
+    else
+    {
+        DrawTextEx(font, "| Create New Room |", (Vector2){30.0f, 30.0f}, 30.0f, 1.0f, BUTTON_UNSELECTED);
+    }
+
+    if (already_in_a_room)
+    {
+        DrawTextEx(font, room_created_text, (Vector2){30.0f, 75.0f}, 30.0f, 1.0f, WHITE);
+    }
+
+    float yOffset = 50;
+    char text_available_rooms[50] = {0};
+    for (int i = 0; i < SERVER_MAX_ROOMS; i++)
+    {
+        if (client_room_ids[i] == 0)
+        {
+            continue;
+        }
+
+        sprintf(text_available_rooms, "Room ID : %d", client_room_ids[i]);
+        DrawTextEx(font, text_available_rooms, (Vector2){30.0f, 120.0f + (yOffset * i)}, 30.0f, 1.0f, RED);
+    }
 
     EndDrawing();
 }

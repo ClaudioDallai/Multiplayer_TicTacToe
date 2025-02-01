@@ -16,8 +16,13 @@ COMMAND_ANNOUNCE_ROOM = 5
 SERVER_RESPONSE_OK = 6
 SERVER_RESPONSE_NEGATED = 7
 SERVER_RESPONSE_DEAD = 8
+SERVER_RESPONSE_ROOM_DESTROYED = 9
+SERVER_RESPONSE_ROOM_CREATED = 10
+SERVER_RESPONSE_KICK = 11
 
-KICK_TIME = 120
+KICK_TIME = 40
+PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
+MAX_ROOMS = 10
 
 
 class Room:
@@ -172,7 +177,8 @@ class Server:
     def __init__(self, address, port):
         self.players = {}
         self.rooms = {}
-        self.room_counter = 0
+        self.room_counter = 1
+        self.last_announcement = time.time()
         self.address = address
         self.port = port
         self.server_clientactions_resolution = {
@@ -191,35 +197,42 @@ class Server:
     def kick(self, sender):
         bad_player = self.players[sender]
         if bad_player.room:
-            # if bad_player.room.has_started():
             if bad_player.room.owner == bad_player:
-                self.destroy_room(bad_player.room)
+                self.destroy_room(sender, bad_player.room)
             else:
                 bad_player.room.reset()
         del self.players[sender]
         print("{} ({}) has been kicked".format(sender, bad_player.name))
+        self.server_response(sender, SERVER_RESPONSE_KICK)
+        self.announces()
 
-    def destroy_room(self, room):
+    def destroy_room(self, player, room):
         del self.rooms[room.room_id]
         room.owner.room = None
         if room.challenger:
             room.challenger = None
+        packet = struct.pack("<II", SERVER_RESPONSE_ROOM_DESTROYED, room.room_id)
+        self.socket.sendto(packet, player)
         print("Room {} destroyed".format(room.room_id))
+        self.announces()
 
     def remove_player(self, sender):
         player = self.players[sender]
         if not player.room:
             del self.players[sender]
             print("Player {} removed".format(player.name))
+            self.server_response(sender, SERVER_RESPONSE_KICK)
             return
         if player == player.room.challenger:
             player.room.reset()
             del self.players[sender]
             print("Player {} removed".format(player.name))
+            self.server_response(sender, SERVER_RESPONSE_KICK)
             return
-        self.destroy_room(player.room)
+        self.destroy_room(sender, player.room)
         del self.players[sender]
         print("Player {} removed".format(player.name))
+        self.server_response(sender, SERVER_RESPONSE_KICK)
 
     def server_response(self, client, response):
         packet = struct.pack("<I", response)
@@ -237,6 +250,7 @@ class Server:
             self.players[sender] = Player(packet[4:25])
             self.server_response(sender, SERVER_RESPONSE_OK)
             print("player {} joined from {} [{} players on server]".format(self.players[sender].name, sender, len(self.players)))
+            self.announces()
             return
         else:
             self.server_response(sender, SERVER_RESPONSE_NEGATED)
@@ -248,21 +262,26 @@ class Server:
         if len(packet) == 8:
             if sender not in self.players:
                 print("Unknown player {}".format(sender))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
             player = self.players[sender]
             if player.room:
                 print("Player {} ({}) already has a room".format(sender, player.name))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
+                return
+            if (len(self.rooms)>= MAX_ROOMS):
+                print("Max limit of rooms")
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
             
             player.room = Room(self.room_counter, player)
             self.rooms[self.room_counter] = player.room
-            print(
-                "Room {} for player {} ({}) created".format(
-                    self.room_counter, sender, player.name
-                )
-            )
+            print("Room {} for player {} ({}) created".format(self.room_counter, sender, player.name))
+            packet = struct.pack("<II", SERVER_RESPONSE_ROOM_CREATED, self.room_counter)
+            self.socket.sendto(packet, sender)
             self.room_counter += 1
             player.last_packet_ts = time.time()
+            self.announces()
             return
         
     def command_challenge_resolution(self, packet, sender):
@@ -272,9 +291,7 @@ class Server:
                 return
             player = self.players[sender]
             if player.room:
-                print(
-                    "Player {} ({}) already in a room".format(sender, player.name)
-                )
+                print("Player {} ({}) already in a room".format(sender, player.name))
                 return
             (room_id,) = struct.unpack("<I", packet[8:12])
             if room_id not in self.rooms:
@@ -289,6 +306,7 @@ class Server:
             player.room = room
             player.last_packet_ts = time.time()
             print("Game on room {} started!".format(room_id))
+            self.announces()
             return
 
     def command_move_resolution(self, packet, sender):
@@ -322,6 +340,7 @@ class Server:
                 print("Unknown player {}".format(sender))
                 return
             self.remove_player(sender)
+            self.announces()
             return
         
 
@@ -352,21 +371,24 @@ class Server:
 
     def announces(self):
         rooms = []
+        room_ids = [0] * MAX_ROOMS
+        counter = 0
+        format = f"<{MAX_ROOMS + 1}I"
+
         for room_id in self.rooms:
             room = self.rooms[room_id]
             if room.is_door_open():
                 rooms.append(room)
+                room_ids[counter] = room_id
+                counter += 1
 
         for sender in self.players:
             player = self.players[sender]
             if player.room:
                 continue
-            for room in rooms:
-                print(
-                    "announcing room {} to player {}".format(room.room_id, player.name)
-                )
-                packet = struct.pack("<III", 0, COMMAND_ANNOUNCE_ROOM, room.room_id)
-                self.socket.sendto(packet, sender)
+
+            packet = struct.pack(format, COMMAND_ANNOUNCE_ROOM, *room_ids)
+            self.socket.sendto(packet, sender)
 
     def check_dead_peers(self):
         now = time.time()
@@ -379,11 +401,21 @@ class Server:
         for sender in dead_players:
             print('removing {} for inactivity...'.format(sender))
             self.remove_player(sender)
+        else:
+            if len(dead_players) > 0:
+                self.announces()
+        
 
     def run(self):
         while True:
             self.tick()
-            self.announces()
+
+            now = time.time()
+            #print (now - self.last_announcement)
+            if ((now - self.last_announcement) > PASSIVE_ROOM_ANNOUNCEMENT_TIME):
+                self.last_announcement = now
+                self.announces()
+
             self.check_dead_peers()
 
 
