@@ -13,6 +13,10 @@ COMMAND_QUIT = 3
 COMMAND_CREATE_ROOM = 4
 COMMAND_ANNOUNCE_ROOM = 5
 
+SERVER_RESPONSE_OK = 6
+SERVER_RESPONSE_NEGATED = 7
+SERVER_RESPONSE_DEAD = 8
+
 KICK_TIME = 120
 
 
@@ -217,20 +221,28 @@ class Server:
         del self.players[sender]
         print("Player {} removed".format(player.name))
 
+    def server_response(self, client, response):
+        packet = struct.pack("<I", response)
+        self.socket.sendto(packet, client)
+        
+
 # From Client - commands resolution
     def command_join_resolution(self, packet, sender):
         if len(packet) == 25:
             if sender in self.players:
                 print("{} has already joined!".format(sender))
                 self.kick(sender)
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
-            self.players[sender] = Player(packet[8:28])
-            print(
-                "player {} joined from {} [{} players on server]".format(
-                    self.players[sender].name, sender, len(self.players)
-                )
-            )
+            self.players[sender] = Player(packet[4:25])
+            self.server_response(sender, SERVER_RESPONSE_OK)
+            print("player {} joined from {} [{} players on server]".format(self.players[sender].name, sender, len(self.players)))
             return
+        else:
+            self.server_response(sender, SERVER_RESPONSE_NEGATED)
+            print("Join request packet size invalid: {}".format(len(packet)))
+
+            
         
     def command_create_room_resolution(self, packet, sender):
         if len(packet) == 8:
@@ -321,7 +333,7 @@ class Server:
             if len(packet) < 8:
                 print("invalid packet size: {}".format(len(packet)))
                 return
-            (command,) = struct.unpack("<I", packet[0:4]) # Da modificare recezione messaggio. Scegliere una nuova standardizzazione rispetto a quella di partenza
+            (command,) = struct.unpack("<I", packet[0:4]) 
 
             if command < LOWER_COMMAND_VALUE or command > UPPER_COMMAND_VALUE:
                 raise Exception("Invalid {} command received".format(command))

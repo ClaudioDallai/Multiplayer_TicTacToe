@@ -11,6 +11,11 @@
 #define COMMAND_MOVE 3
 #define COMMAND_QUIT 4
 
+// Server possible responses
+#define SERVER_RESPONSE_OK 6
+#define SERVER_RESPONSE_NEGATED 7
+#define SERVER_RESPONSE_DEAD 8
+
 typedef enum game_state
 {
     CONNECTION, WAITING_ROOM, PLAY
@@ -34,11 +39,15 @@ void waiting_room_draw(void);
 void play_process_input(void);
 void play_draw(void);
 
+void manage_application_exit(void);
+
 void load_assets(void);
 
 void internal_reset_pressed_buttons(void);
 
 void join_server(void);
+int receive_package(void);
 
+void manage_server_join(void);
 
 #endif

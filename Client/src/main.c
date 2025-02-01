@@ -19,9 +19,12 @@ int main (int argc, char **argv)
             case CONNECTION:
                 connection_process_input();
                 connection_draw();
+                manage_server_join();
                 break;
 
             case WAITING_ROOM:
+                waiting_room_process_input();
+                waiting_room_draw();
                 break;
 
             case PLAY:

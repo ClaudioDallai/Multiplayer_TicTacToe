@@ -69,6 +69,7 @@ void game_deinit(void)
 {
     UnloadFont(font);
     CloseAudioDevice();
+    deinit_client();
 }
 
 
@@ -105,6 +106,48 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
     }
 }
 
+int receive_package(void)
+{
+    char buffer[64]= {0};
+    int bytes_received = receive_packet(buffer, sizeof(buffer));
+    if(bytes_received >= 4) // At least a response was detected (integer)
+    {
+        uint32_t command;
+        memcpy(&command, buffer, sizeof(command));
+
+        switch (command)
+        {
+            case SERVER_RESPONSE_OK:
+                if (bytes_received == 4)
+                {
+                    printf("Server response was OK: %u\n", command);
+                    return SERVER_RESPONSE_OK;
+                }
+                break;
+            case SERVER_RESPONSE_NEGATED:
+                if (bytes_received == 4)
+                {
+                    printf("Server response was NEGATED: %u\n", command);
+                    return SERVER_RESPONSE_NEGATED;
+                }
+                break;
+            case SERVER_RESPONSE_DEAD:
+                if(bytes_received == 4)
+                {
+                    printf("Server is DEAD: %u\n", command);
+                    return SERVER_RESPONSE_DEAD;
+                }
+                break;
+            default:
+                printf("Unknown command received: %u\n", command);
+                return -1;
+        }
+    }
+    
+    return -1;
+}
+
+
 void internal_reset_pressed_buttons(void)
 {
     address_text_pressed = 0;
@@ -112,14 +155,34 @@ void internal_reset_pressed_buttons(void)
     player_text_pressed = 0;
 }
 
-
-void connection_process_input(void)
+void manage_application_exit(void)
 {
     if (WindowShouldClose())
     {
+        if (current_client_state != CONNECTION)
+        {
+            // TODO: Avvisa il server prima di chiudere il socket
+        }
+        
         quit = 1;
     }
+}
 
+void manage_server_join(void)
+{
+    int server_response = receive_package();
+    if (server_response == SERVER_RESPONSE_OK)
+    {
+        internal_reset_pressed_buttons();
+        current_client_state = WAITING_ROOM;
+    }
+}
+
+
+void connection_process_input(void)
+{
+    manage_application_exit();
+    
     if (CheckCollisionPointRec(GetMousePosition(), address_button)) 
     {
         address_text_pressed = 1;
@@ -256,3 +319,15 @@ void connection_draw(void)
     EndDrawing();
 }
 
+void waiting_room_process_input(void)
+{
+    manage_application_exit();
+}
+
+void waiting_room_draw(void)
+{
+    BeginDrawing();
+    ClearBackground(BLACK);
+
+    EndDrawing();
+}
