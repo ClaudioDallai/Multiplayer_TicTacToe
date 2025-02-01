@@ -285,7 +285,7 @@ class Server:
             return
         
     def command_challenge_resolution(self, packet, sender):
-        if len(packet) == 12:
+        if len(packet) == 8:
             if sender not in self.players:
                 print("Unknown player {}".format(sender))
                 return
@@ -293,7 +293,7 @@ class Server:
             if player.room:
                 print("Player {} ({}) already in a room".format(sender, player.name))
                 return
-            (room_id,) = struct.unpack("<I", packet[8:12])
+            (room_id,) = struct.unpack("<I", packet[4:8])
             if room_id not in self.rooms:
                 print("Unknown room {}".format(room_id))
                 return

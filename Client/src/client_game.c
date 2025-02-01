@@ -367,6 +367,31 @@ void create_server_room(void)
     send_packet(buffer, sizeof(buffer));
 }
 
+void challenge_room(void)
+{
+    int room_to_challenge = atoi(target_room_id);
+    int room_found = 0;
+
+    for (int i = 0; i < SERVER_MAX_ROOMS; i++)
+    {
+        if (client_room_ids[i] == room_to_challenge)
+        {
+            room_found = 1;
+            break;
+        }
+    }
+
+    if (room_found)
+    {
+        printf("Ask for challenge room: %d\n", room_found);
+        char buffer[8] = {0}; 
+        uint32_t challenge_room_command = COMMAND_CHALLENGE;
+        memcpy(buffer, &challenge_room_command, sizeof(challenge_room_command));
+        memcpy(buffer + sizeof(challenge_room_command), &room_to_challenge, sizeof(room_to_challenge)); 
+        send_packet(buffer, sizeof(buffer));
+    }
+}
+
 void manage_server_waiting_rooms(void)
 {
     char buffer[64]= {0};
@@ -467,9 +492,10 @@ void waiting_room_process_input(void)
         target_room_id_text_pressed = 0;
     }
 
-    if (IsKeyPressed(KEY_ENTER) && port_index > 0) 
+    if (IsKeyPressed(KEY_ENTER) && port_index > 0 && !already_in_a_room) 
     {
         // Challenge room
+        challenge_room();
     }
 }
 
