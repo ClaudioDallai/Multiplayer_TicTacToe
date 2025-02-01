@@ -25,6 +25,7 @@
 #define MAX_IP_LENGTH 15
 #define MAX_PORT_LENGTH 4
 #define MAX_PLAYER_LENGTH 20
+#define MAX_ROOM_ID_LENGHT 10
 #define SERVER_MAX_ROOMS 10
 
 #define BUTTON_SELECTED WHITE
@@ -63,7 +64,7 @@ void join_server(void);
 int receive_response_package(void);
 
 void manage_server_join(void);
-void manager_server_quit(void);
+void manage_server_quit(void);
 
 void manage_server_waiting_rooms(void);
 void create_server_room(void);

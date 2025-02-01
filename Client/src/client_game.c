@@ -44,6 +44,11 @@ int current_client_created_room_id = -1;
 char room_created_text[64] = {0};
 Rectangle create_room_button = {30.0f, 30.0f, 310.0f, 30.0f};
 
+char target_room_id[MAX_ROOM_ID_LENGHT + 1] = {0};
+int target_room_id_index = 0;
+int target_room_id_text_pressed = 0;
+Rectangle target_room_id_button = {400.0f, 30.0f, 250.0f, 30.0f};
+
 
 
 // Init
@@ -165,9 +170,17 @@ void internal_reset_pressed_buttons(void)
 void internal_reset_client_ids(void)
 {
     for (int i = 0; i < SERVER_MAX_ROOMS; i++)
-        {
-            client_room_ids[i] = 0;
-        }
+    {
+        client_room_ids[i] = 0;
+    }
+
+    target_room_id_index = 0;
+    target_room_id_text_pressed = 0;
+
+    for (int i = 0; i <= MAX_ROOM_ID_LENGHT; i++)
+    {
+        target_room_id[i] = '\0';
+    }
 }
 
 
@@ -177,7 +190,7 @@ void manage_application_exit(void)
     {
         if (current_client_state != CONNECTION)
         {
-            manager_server_quit();
+            manage_server_quit();
         }
 
         quit = 1;
@@ -185,7 +198,7 @@ void manage_application_exit(void)
 }
 
 
-void manager_server_quit(void)
+void manage_server_quit(void)
 {
     char buffer[8] = {0};
     uint32_t quit_command = COMMAND_QUIT;
@@ -425,15 +438,38 @@ void waiting_room_process_input(void)
    if (CheckCollisionPointRec(GetMousePosition(), create_room_button) && !already_in_a_room)
     {
         create_room_text_pressed = 1;
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_ENTER))
         {
             create_room_text_pressed = 0;
             create_server_room();
         }
     }
+    else if(CheckCollisionPointRec(GetMousePosition(), target_room_id_button) && !already_in_a_room)
+    {
+        target_room_id_text_pressed = 1;
+        int key= GetCharPressed();
+        
+        if (target_room_id_index < MAX_ROOM_ID_LENGHT && (key >= 46 && key <= 57))
+        {
+            target_room_id[target_room_id_index] = (char)key;
+            target_room_id_index++;
+            target_room_id[target_room_id_index] = '\0';
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && target_room_id_index > 0) 
+        {
+            target_room_id_index--;
+            target_room_id[target_room_id_index] = '\0';
+        }
+    }
     else
     {
         create_room_text_pressed = 0;
+        target_room_id_text_pressed = 0;
+    }
+
+    if (IsKeyPressed(KEY_ENTER) && port_index > 0) 
+    {
+        // Challenge room
     }
 }
 
@@ -449,6 +485,17 @@ void waiting_room_draw(void)
     else
     {
         DrawTextEx(font, "| Create New Room |", (Vector2){30.0f, 30.0f}, 30.0f, 1.0f, BUTTON_UNSELECTED);
+    }
+
+    if (target_room_id_text_pressed)
+    {
+        DrawTextEx(font, "Select Room ID :", (Vector2){400.0f, 30.0f}, 30.0f, 1.0f, BUTTON_SELECTED);
+        DrawTextEx(font, target_room_id, (Vector2){400.0f, 75.0f}, 30.0f, 5.0f, BUTTON_SELECTED);
+    }
+    else
+    {
+        DrawTextEx(font, "Select Room ID :", (Vector2){400.0f, 30.0f}, 30.0f, 1.0f, BUTTON_UNSELECTED);
+        DrawTextEx(font, target_room_id, (Vector2){400.0f, 75.0f}, 30.0f, 5.0f, BUTTON_UNSELECTED);
     }
 
     if (already_in_a_room)
