@@ -12,6 +12,8 @@ const int screen_width = 800;
 const int screen_height = 600;
 const int target_fps = 60;
 
+const int playfield_draw_offset = 100;
+
 const int screen_width_playfield = GRID_SIZE*CELL_SIZE;
 const int screen_height_playfield = GRID_SIZE*CELL_SIZE;
 
@@ -128,7 +130,7 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
     }
 }
 
-int receive_response_package(void)
+int receive_login_response_package(void)
 {
     char buffer[64]= {0};
     int bytes_received = receive_packet(buffer, sizeof(buffer));
@@ -218,7 +220,7 @@ void manage_server_quit(void)
 
 void manage_server_join(void)
 {
-    int server_response = receive_response_package();
+    int server_response = receive_login_response_package();
     if (server_response == SERVER_RESPONSE_OK)
     {
         current_client_state = WAITING_ROOM;
@@ -565,7 +567,7 @@ void play_process_input(void)
         int cell_width = screen_width_playfield / GRID_SIZE; 
         int cell_height = screen_height_playfield / GRID_SIZE;
 
-        int col = (mouse_pos.x - 100) / cell_width;
+        int col = (mouse_pos.x - playfield_draw_offset) / cell_width;
         int row = mouse_pos.y / cell_height;
         int index = row * GRID_SIZE + col;
        
@@ -580,7 +582,7 @@ void draw_grid_playfield(const int screen_width_playfield, const int screen_heig
 
     for (int row = 0; row < GRID_SIZE; row++) {
         for (int col = 0; col < GRID_SIZE; col++) {
-            int x = col * cell_width + 100;
+            int x = col * cell_width + playfield_draw_offset;
             int y = row * cell_height;
             int index = row * GRID_SIZE + col;
             Rectangle button = { x, y, cell_width, cell_height };

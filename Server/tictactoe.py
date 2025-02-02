@@ -23,7 +23,7 @@ SERVER_RESPONSE_ROOM_CLOSING = 12
 
 SERVER_GAME_PLAYFIELD_AND_TURN = 13
 
-KICK_TIME = 30
+KICK_TIME = 120
 PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
 MAX_ROOMS = 10
 
@@ -138,35 +138,20 @@ class Room:
 
     def move(self, player, cell):
         if cell < 0 or cell > 8:
-            print("A")
             return False
         if self.playfield[cell] is not None:
-            print("B")
-
             return False
         if self.winner:
-            print("C")
-
             return False
         if self.draw:
-            print("D")
-
             return False
         if self.challenger == (None, None):
-            print("E")
-
             return False
         if player.room != self:
-            print("F")
-
             return False
         if player != self.owner and player != self.challenger[0]:
-            print("G")
-
             return False
         if player != self.turn:
-            print("H")
-
             return False
         self.playfield[cell] = player
         self.winner = self.check_victory()
@@ -264,6 +249,8 @@ class Server:
 
         if sender not in self.players:
             print("Unknown player leaving: {}".format(sender))
+            self.server_response(sender, SERVER_RESPONSE_KICK)
+            return
 
         player = self.players[sender]
         if not player.room:
@@ -368,7 +355,7 @@ class Server:
 
     def playfield_turn_communication(self, room):
         playfield_assembled = room.assemble_playfield_state()
-        print(*playfield_assembled)
+        #print(*playfield_assembled)
 
         if (room.turn == room.owner):
             packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 1, *playfield_assembled) # Command + turn + playfield updated
@@ -383,12 +370,7 @@ class Server:
             packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 1, *playfield_assembled)
             self.socket.sendto(packet, room.challenger[1])
         else:
-            print("TURN CORRUPTED!!!!")
-            print(room.turn)
-            print(room.owner)
-            print(room.challenger[0])
-
-            
+            print("Turn corrupted - cannot notify players")
 
 
     def command_move_resolution(self, packet, sender):

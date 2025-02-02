@@ -66,7 +66,7 @@ void internal_reset_pressed_buttons(void);
 void internal_reset_client_ids(void);
 
 void join_server(void);
-int receive_response_package(void);
+int receive_login_response_package(void);
 
 void manage_server_join(void);
 void manage_server_quit(void);
