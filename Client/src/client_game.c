@@ -115,6 +115,10 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
                 internal_reset_client_ids();
                 break;
             case PLAY:
+                for (int i = 0; i <= (GRID_SIZE * GRID_SIZE); i++)
+                {
+                    grid[i] = 0;
+                }
                 break;
             default:
                 break;
@@ -567,12 +571,12 @@ void draw_grid_playfield(const int screen_width_playfield, const int screen_heig
             Rectangle button = { x, y, cellWidth, cellHeight };
             DrawRectangleRec(button, BLACK);
             DrawRectangleLinesEx(button, 2, RED);
-            if (grid[index] == 1) 
+            if (grid[index] == 1) // An X is present on current cell
             {
                 DrawLine(x + 20, y + 20, x + cellWidth - 20, y + cellHeight - 20, RED);
                 DrawLine(x + 20, y + cellHeight - 20, x + cellWidth - 20, y + 20, RED);
             } 
-            else if (grid[index] == 2) 
+            else if (grid[index] == 2) // A O is present on current cell
             {
                 DrawCircleLines(x + cellWidth / 2, y + cellHeight / 2, cellWidth / 3, RED);
             }
