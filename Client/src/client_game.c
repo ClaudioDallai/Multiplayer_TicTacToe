@@ -21,6 +21,7 @@ const char* font_path = "./resources/setback.png";
 // Client application related vars
 int quit = 0;
 game_state current_client_state = CONNECTION;
+int turn_token = 0;
 
 int grid[GRID_SIZE * GRID_SIZE] = {0};
 float master_volume_value = 0.5f;
@@ -95,7 +96,7 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
             break;
         case WAITING_ROOM:
             create_room_text_pressed = 0;
-           internal_reset_client_ids();
+            internal_reset_client_ids();
             break;
         case PLAY:
             break;
@@ -112,6 +113,7 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
                 break;
             case WAITING_ROOM:
                 already_in_a_room = 0;
+                turn_token = 0;
                 internal_reset_client_ids();
                 break;
             case PLAY:
@@ -556,29 +558,47 @@ void waiting_room_draw(void)
 void play_process_input(void)
 {
     manage_application_exit();
+
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        Vector2 mouse_pos = GetMousePosition();
+
+        int cell_width = screen_width_playfield / GRID_SIZE; 
+        int cell_height = screen_height_playfield / GRID_SIZE;
+
+        int col = mouse_pos.x / cell_width;
+        int row = mouse_pos.y / cell_height;
+        int index = row * GRID_SIZE + col;
+
+        if (index > 0)
+        {
+            index--;
+        }
+        
+        request_for_a_move(index);
+    }
 }
 
 void draw_grid_playfield(const int screen_width_playfield, const int screen_height_playfield, const int grid[9])
 {
-    int cellWidth = screen_width_playfield / GRID_SIZE;
-    int cellHeight = screen_height_playfield / GRID_SIZE;
+    int cell_width = screen_width_playfield / GRID_SIZE;
+    int cell_height = screen_height_playfield / GRID_SIZE;
 
     for (int row = 0; row < GRID_SIZE; row++) {
         for (int col = 0; col < GRID_SIZE; col++) {
-            int x = col * cellWidth + 100;
-            int y = row * cellHeight;
+            int x = col * cell_width + 100;
+            int y = row * cell_height;
             int index = row * GRID_SIZE + col;
-            Rectangle button = { x, y, cellWidth, cellHeight };
+            Rectangle button = { x, y, cell_width, cell_height };
             DrawRectangleRec(button, BLACK);
             DrawRectangleLinesEx(button, 2, RED);
             if (grid[index] == 1) // An X is present on current cell
             {
-                DrawLine(x + 20, y + 20, x + cellWidth - 20, y + cellHeight - 20, RED);
-                DrawLine(x + 20, y + cellHeight - 20, x + cellWidth - 20, y + 20, RED);
+                DrawLine(x + 20, y + 20, x + cell_width - 20, y + cell_height - 20, RED);
+                DrawLine(x + 20, y + cell_height - 20, x + cell_width - 20, y + 20, RED);
             } 
             else if (grid[index] == 2) // A O is present on current cell
             {
-                DrawCircleLines(x + cellWidth / 2, y + cellHeight / 2, cellWidth / 3, RED);
+                DrawCircleLines(x + cell_width / 2, y + cell_height / 2, cell_width / 3, RED);
             }
         }
     }
@@ -612,11 +632,41 @@ void manage_server_play_state(void)
             case SERVER_RESPONSE_OK:
                 break;
             case SERVER_RESPONSE_KICK:
+                printf("I WAS KICKED\n");
                 current_client_state = CONNECTION;
+                break;
             case SERVER_RESPONSE_ROOM_CLOSING:
                 current_client_state = WAITING_ROOM;
+                break;
             default:
                 break;
         }
+    }
+
+    if (bytes_received == 44)
+    {
+        printf("Command: %u\n", command);
+        if (command == SERVER_GAME_PLAYFIELD_AND_TURN)
+        {
+            memcpy(&turn_token, buffer + sizeof(command), sizeof(turn_token));
+            memcpy(grid, buffer + sizeof(command) + sizeof(turn_token), sizeof(grid));
+            printf("received playfield and turn %d\n", turn_token);
+        }
+    }
+}
+
+void request_for_a_move(const int cell)
+{
+    if (turn_token)
+    {
+        char buffer[8] = {0}; 
+        uint32_t move_command = COMMAND_MOVE;
+        memcpy(buffer, &move_command, sizeof(move_command));
+        memcpy(buffer + sizeof(move_command), &cell, sizeof(cell)); 
+        send_packet(buffer, sizeof(buffer));
+    }
+    else
+    {
+        printf("Not your Turn!\n");
     }
 }

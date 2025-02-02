@@ -21,7 +21,7 @@ SERVER_RESPONSE_ROOM_CREATED = 10
 SERVER_RESPONSE_KICK = 11
 SERVER_RESPONSE_ROOM_CLOSING = 12
 
-SERVER_GAME_TURN_RULE = 13
+SERVER_GAME_PLAYFIELD_AND_TURN = 13
 
 KICK_TIME = 30
 PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
@@ -44,33 +44,23 @@ class Room:
                 return True
         return False
 
-    def print_symbol(self, cell):
+    def declare_symbol(self, cell):
         current_player = self.playfield[cell]
         if not current_player:
-            return " "
+            return 0
         if current_player == self.owner:
-            return "X"
+            return 1
         if current_player == self.challenger:
-            return "O"
+            return 2
         else:
-            return "?"
+            return 3
+        
+    def assemble_playfield_state(self):
+        playfield_assembled = [0] * 9
+        for cell_index in range(len(self.playfield)):
+            playfield_assembled[cell_index] = self.declare_symbol(cell_index)
+        return playfield_assembled
 
-    def print_playfield(self):
-        print(
-            "|{}|{}|{}|".format(
-                self.print_symbol(0), self.print_symbol(1), self.print_symbol(2)
-            )
-        )
-        print(
-            "|{}|{}|{}|".format(
-                self.print_symbol(3), self.print_symbol(4), self.print_symbol(5)
-            )
-        )
-        print(
-            "|{}|{}|{}|".format(
-                self.print_symbol(6), self.print_symbol(7), self.print_symbol(8)
-            )
-        )
 
     def reset(self):
         self.challenger = (None, None)
@@ -138,6 +128,9 @@ class Room:
         return self.check_diagonal_right()
     
     def check_draw(self):
+        if self.winner:
+            return False
+        
         for cell in self.playfield:
             if cell is None:
                 return False
@@ -145,20 +138,35 @@ class Room:
 
     def move(self, player, cell):
         if cell < 0 or cell > 8:
+            print("A")
             return False
         if self.playfield[cell] is not None:
+            print("B")
+
             return False
         if self.winner:
+            print("C")
+
             return False
         if self.draw:
+            print("D")
+
             return False
         if self.challenger is None:
+            print("E")
+
             return False
         if player.room != self:
+            print("F")
+
             return False
         if player != self.owner and player != self.challenger:
+            print("G")
+
             return False
         if player != self.turn:
+            print("H")
+
             return False
         self.playfield[cell] = player
         self.winner = self.check_victory()
@@ -200,10 +208,8 @@ class Server:
     def kick(self, sender):
         bad_player = self.players[sender]
         if bad_player.room:
-            if bad_player.room.owner == bad_player:
-                self.destroy_room(sender, bad_player.room)
-            else:
-                bad_player.room.reset()
+            self.destroy_room(sender, bad_player.room)
+
         del self.players[sender]
         print("{} ({}) has been kicked".format(sender, bad_player.name))
         self.server_response(sender, SERVER_RESPONSE_KICK)
@@ -357,10 +363,30 @@ class Server:
             self.server_response(sender, SERVER_RESPONSE_OK)
             self.server_response(self.rooms[room_id][1], SERVER_RESPONSE_OK) # Notify room owner
             self.announces()
+            self.playfield_turn_communication(room)
             return
 
+    def playfield_turn_communication(self, room):
+        playfield_assembled = room.assemble_playfield_state()
+        print(*playfield_assembled)
+
+        if (room.turn == room.owner):
+            packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 1, *playfield_assembled) # Command + turn + playfield updated
+            self.socket.sendto(packet, self.rooms[room.room_id][1])
+
+            packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 0, *playfield_assembled)
+            self.socket.sendto(packet, room.challenger[1])
+        elif (room.turn == room.challenger[0]):
+            packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 0, *playfield_assembled)
+            self.socket.sendto(packet, self.rooms[room.room_id][1])
+
+            packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 1, *playfield_assembled)
+            self.socket.sendto(packet, room.challenger[1])
+            
+
+
     def command_move_resolution(self, packet, sender):
-        if len(packet) == 12:
+        if len(packet) == 8:
             if sender not in self.players:
                 print("Unknown player {}".format(sender))
                 return
@@ -368,20 +394,21 @@ class Server:
             if not player.room:
                 print("Player {} ({}) is not in a room".format(sender, player.name))
                 return
-            (cell,) = struct.unpack("<I", packet[8:12])
+            (cell,) = struct.unpack("<I", packet[4:8])
+            print(f"CELL: {cell}")
             if not player.room.move(player, cell):
                 print("player {} did an invalid move!".format(player.name))
                 return
             
             player.last_packet_ts = time.time()
-            player.room.print_playfield()
+            self.playfield_turn_communication(player.room)
             if player.room.winner:
                 print("player {} from room {} did WON!".format(player.room.winner.name, player.room.room_id))
-                player.room.reset()
+                #player.room.reset()
                 return
             if player.room.draw:
                 print("Room {} ended in draw!".format(player.room.room_id))
-                player.room.reset()
+                #player.room.reset()
                 return
     
     def command_quit_resolution(self, packet, sender):

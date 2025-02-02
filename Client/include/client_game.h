@@ -22,7 +22,7 @@
 #define SERVER_RESPONSE_ROOM_CREATED 10
 #define SERVER_RESPONSE_KICK 11
 #define SERVER_RESPONSE_ROOM_CLOSING 12
-#define SERVER_GAME_TURN_RULE 13
+#define SERVER_GAME_PLAYFIELD_AND_TURN 13
 
 #define MAX_IP_LENGTH 15
 #define MAX_PORT_LENGTH 4
@@ -78,5 +78,6 @@ void create_server_room(void);
 void join_server_room(void);
 
 void manage_server_play_state(void);
+void request_for_a_move(const int cell);
 
 #endif
