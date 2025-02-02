@@ -30,6 +30,9 @@ int main (int argc, char **argv)
                 break;
 
             case PLAY:
+                manage_server_play_state();
+                play_process_input();
+                play_draw();
                 break;
 
             default:

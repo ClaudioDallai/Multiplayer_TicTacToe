@@ -12,6 +12,9 @@ const int screen_width = 800;
 const int screen_height = 600;
 const int target_fps = 60;
 
+const int screen_width_playfield = GRID_SIZE*CELL_SIZE;
+const int screen_height_playfield = GRID_SIZE*CELL_SIZE;
+
 // Resources
 const char* font_path = "./resources/setback.png";
 
@@ -19,6 +22,7 @@ const char* font_path = "./resources/setback.png";
 int quit = 0;
 game_state current_client_state = CONNECTION;
 
+int grid[GRID_SIZE * GRID_SIZE] = {0};
 float master_volume_value = 0.5f;
 Font font;
 
@@ -410,6 +414,7 @@ void manage_server_waiting_rooms(void)
         switch (command)
         {
             case SERVER_RESPONSE_OK:
+                current_client_state = PLAY;
                 break;
             case SERVER_RESPONSE_KICK:
                 current_client_state = CONNECTION;
@@ -444,7 +449,7 @@ void manage_server_waiting_rooms(void)
         }
     }
 
-    if (bytes_received == 44)
+    if (bytes_received == ((4 * SERVER_MAX_ROOMS) + 4))
     {
         printf("Command: %u\n", command);
 
@@ -494,7 +499,6 @@ void waiting_room_process_input(void)
 
     if (IsKeyPressed(KEY_ENTER) && port_index > 0 && !already_in_a_room) 
     {
-        // Challenge room
         challenge_room();
     }
 }
@@ -543,4 +547,72 @@ void waiting_room_draw(void)
     }
 
     EndDrawing();
+}
+
+void play_process_input(void)
+{
+    manage_application_exit();
+}
+
+void draw_grid_playfield(const int screen_width_playfield, const int screen_height_playfield, const int grid[9])
+{
+    int cellWidth = screen_width_playfield / GRID_SIZE;
+    int cellHeight = screen_height_playfield / GRID_SIZE;
+
+    for (int row = 0; row < GRID_SIZE; row++) {
+        for (int col = 0; col < GRID_SIZE; col++) {
+            int x = col * cellWidth + 100;
+            int y = row * cellHeight;
+            int index = row * GRID_SIZE + col;
+            Rectangle button = { x, y, cellWidth, cellHeight };
+            DrawRectangleRec(button, BLACK);
+            DrawRectangleLinesEx(button, 2, RED);
+            if (grid[index] == 1) 
+            {
+                DrawLine(x + 20, y + 20, x + cellWidth - 20, y + cellHeight - 20, RED);
+                DrawLine(x + 20, y + cellHeight - 20, x + cellWidth - 20, y + 20, RED);
+            } 
+            else if (grid[index] == 2) 
+            {
+                DrawCircleLines(x + cellWidth / 2, y + cellHeight / 2, cellWidth / 3, RED);
+            }
+        }
+    }
+}
+
+void play_draw(void)
+{
+    BeginDrawing();
+    ClearBackground(BLACK);
+    draw_grid_playfield(screen_width_playfield, screen_height_playfield, grid);
+    EndDrawing();
+}
+
+void manage_server_play_state(void)
+{
+    char buffer[64]= {0};
+    int bytes_received = receive_packet(buffer, sizeof(buffer));
+    uint32_t command;
+
+    if (bytes_received >= 4)
+    {
+        memcpy(&command, buffer, sizeof(command));
+    }
+
+    if (bytes_received == 4)
+    {
+        printf("Command: %u\n", command);
+
+        switch (command)
+        {
+            case SERVER_RESPONSE_OK:
+                break;
+            case SERVER_RESPONSE_KICK:
+                current_client_state = CONNECTION;
+            case SERVER_RESPONSE_ROOM_CLOSING:
+                current_client_state = WAITING_ROOM;
+            default:
+                break;
+        }
+    }
 }

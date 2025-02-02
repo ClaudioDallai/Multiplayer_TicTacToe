@@ -19,6 +19,9 @@ SERVER_RESPONSE_DEAD = 8
 SERVER_RESPONSE_ROOM_DESTROYED = 9
 SERVER_RESPONSE_ROOM_CREATED = 10
 SERVER_RESPONSE_KICK = 11
+SERVER_RESPONSE_ROOM_CLOSING = 12
+
+SERVER_GAME_TURN_RULE = 13
 
 KICK_TIME = 40
 PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
@@ -207,7 +210,17 @@ class Server:
         self.announces()
 
     def destroy_room(self, player, room):
-        del self.rooms[room.room_id]
+        if room is None:
+            packet = struct.pack("<II", SERVER_RESPONSE_ROOM_DESTROYED, room.room_id)
+            self.socket.sendto(packet, player)
+            self.announces()
+            return
+        if room.room_id in self.rooms:
+            packet = struct.pack("<II", SERVER_RESPONSE_ROOM_CLOSING, room.room_id)
+            self.socket.sendto(packet, self.rooms[room.room_id][1])
+            del self.rooms[room.room_id]
+            self.announces()
+            
         room.owner.room = None
         if room.challenger:
             room.challenger = None
@@ -217,22 +230,24 @@ class Server:
         self.announces()
 
     def remove_player(self, sender):
+        print("PLAYER REMOVAL REQUESTED!")
         player = self.players[sender]
         if not player.room:
+            print("Player not playing {} removed".format(player.name))
             del self.players[sender]
-            print("Player {} removed".format(player.name))
-            self.server_response(sender, SERVER_RESPONSE_KICK)
+            self.server_response(sender, SERVER_RESPONSE_KICK) # just notify leaving player
             return
         if player == player.room.challenger:
+            print("Player challenger {} removed".format(player.name))
             player.room.reset()
             del self.players[sender]
-            print("Player {} removed".format(player.name))
+            self.server_response(self.rooms[player.room.room_id][1], SERVER_RESPONSE_ROOM_CLOSING) # Notify owner or the room that challenger left
             self.server_response(sender, SERVER_RESPONSE_KICK)
             return
         self.destroy_room(sender, player.room)
+        print("Player owner {} removed".format(player.name))
         del self.players[sender]
-        print("Player {} removed".format(player.name))
-        self.server_response(sender, SERVER_RESPONSE_KICK)
+        self.server_response(sender, SERVER_RESPONSE_KICK) # Room owner was kicked first
 
     def server_response(self, client, response):
         packet = struct.pack("<I", response)
@@ -275,7 +290,7 @@ class Server:
                 return
             
             player.room = Room(self.room_counter, player)
-            self.rooms[self.room_counter] = player.room
+            self.rooms[self.room_counter] = (player.room, sender) # Save room and IP Owner
             print("Room {} for player {} ({}) created".format(self.room_counter, sender, player.name))
             packet = struct.pack("<II", SERVER_RESPONSE_ROOM_CREATED, self.room_counter)
             self.socket.sendto(packet, sender)
@@ -288,24 +303,30 @@ class Server:
         if len(packet) == 8:
             if sender not in self.players:
                 print("Unknown player {}".format(sender))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
             player = self.players[sender]
             if player.room:
                 print("Player {} ({}) already in a room".format(sender, player.name))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
             (room_id,) = struct.unpack("<I", packet[4:8])
             if room_id not in self.rooms:
                 print("Unknown room {}".format(room_id))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
-            room = self.rooms[room_id]
+            room = self.rooms[room_id][0]
             if not room.is_door_open():
                 print("Room {} is closed!".format(room_id))
+                self.server_response(sender, SERVER_RESPONSE_NEGATED)
                 return
             
             room.challenger = player
             player.room = room
             player.last_packet_ts = time.time()
             print("Game on room {} started!".format(room_id))
+            self.server_response(sender, SERVER_RESPONSE_OK)
+            self.server_response(self.rooms[room_id][1], SERVER_RESPONSE_OK) # Notify room owner
             self.announces()
             return
 
@@ -376,7 +397,7 @@ class Server:
         format = f"<{MAX_ROOMS + 1}I"
 
         for room_id in self.rooms:
-            room = self.rooms[room_id]
+            room = self.rooms[room_id][0]
             if room.is_door_open():
                 rooms.append(room)
                 room_ids[counter] = room_id
@@ -411,7 +432,6 @@ class Server:
             self.tick()
 
             now = time.time()
-            #print (now - self.last_announcement)
             if ((now - self.last_announcement) > PASSIVE_ROOM_ANNOUNCEMENT_TIME):
                 self.last_announcement = now
                 self.announces()

@@ -21,6 +21,8 @@
 #define SERVER_RESPONSE_ROOM_DESTROYED 9
 #define SERVER_RESPONSE_ROOM_CREATED 10
 #define SERVER_RESPONSE_KICK 11
+#define SERVER_RESPONSE_ROOM_CLOSING 12
+#define SERVER_GAME_TURN_RULE 13
 
 #define MAX_IP_LENGTH 15
 #define MAX_PORT_LENGTH 4
@@ -30,6 +32,8 @@
 
 #define BUTTON_SELECTED WHITE
 #define BUTTON_UNSELECTED RED
+#define GRID_SIZE 3
+#define CELL_SIZE 200
 
 typedef enum game_state
 {
@@ -55,6 +59,7 @@ void waiting_room_draw(void);
 
 void play_process_input(void);
 void play_draw(void);
+void draw_grid_playfield(const int screen_width_playfield, const int screen_height_playfield, const int grid[9]);
 
 void load_assets(void);
 void internal_reset_pressed_buttons(void);
@@ -71,5 +76,7 @@ void challenge_room(void);
 void manage_server_waiting_rooms(void);
 void create_server_room(void);
 void join_server_room(void);
+
+void manage_server_play_state(void);
 
 #endif
