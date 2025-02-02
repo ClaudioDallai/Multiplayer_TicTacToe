@@ -244,9 +244,9 @@ class Server:
             self.server_response(ip_player, SERVER_RESPONSE_KICK)
             self.server_response(self.rooms[room.room_id][1], SERVER_RESPONSE_ROOM_CLOSING)
             room.owner.last_packet_ts = time.time()
-            room.reset()
             room.owner.room = None
             room.owner = None
+            room.reset()
 
         if room.room_id in self.rooms:
             del self.rooms[room.room_id]
@@ -268,11 +268,8 @@ class Server:
         
         if player == player.room.challenger[0]:
             print("Player challenger {} removed".format(player.name))
-            player.room.reset()
+            self.destroy_room(player.room.challenger[1], self.rooms[player.room.room_id][0])
             del self.players[sender]
-            self.server_response(self.rooms[player.room.room_id][1], SERVER_RESPONSE_ROOM_CLOSING) # Notify owner or the room that challenger left
-            self.server_response(sender, SERVER_RESPONSE_KICK)
-            self.destroy_room(self.rooms[player.room.room_id][1], self.rooms[player.room.room_id][0])
             return
         
         self.destroy_room(sender, player.room)
