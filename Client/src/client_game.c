@@ -565,15 +565,10 @@ void play_process_input(void)
         int cell_width = screen_width_playfield / GRID_SIZE; 
         int cell_height = screen_height_playfield / GRID_SIZE;
 
-        int col = mouse_pos.x / cell_width;
+        int col = (mouse_pos.x - 100) / cell_width;
         int row = mouse_pos.y / cell_height;
         int index = row * GRID_SIZE + col;
-
-        if (index > 0)
-        {
-            index--;
-        }
-        
+       
         request_for_a_move(index);
     }
 }
@@ -608,7 +603,20 @@ void play_draw(void)
 {
     BeginDrawing();
     ClearBackground(BLACK);
+
     draw_grid_playfield(screen_width_playfield, screen_height_playfield, grid);
+    if (turn_token)
+    {
+        DrawTextEx(font, "Your", (Vector2){10.0f, 40.0f}, 30.0f, 1.0f, RED);
+        DrawTextEx(font, "Turn!", (Vector2){10.0f, 80.0f}, 30.0f, 1.0f, RED);
+    }
+    else
+    {
+        DrawTextEx(font, "Not", (Vector2){10.0f, 40.0f}, 30.0f, 1.0f, RED);
+        DrawTextEx(font, "Your", (Vector2){10.0f, 80.0f}, 30.0f, 1.0f, RED);
+        DrawTextEx(font, "Turn!", (Vector2){10.0f, 120.0f}, 30.0f, 1.0f, RED);
+    }
+
     EndDrawing();
 }
 
@@ -632,7 +640,6 @@ void manage_server_play_state(void)
             case SERVER_RESPONSE_OK:
                 break;
             case SERVER_RESPONSE_KICK:
-                printf("I WAS KICKED\n");
                 current_client_state = CONNECTION;
                 break;
             case SERVER_RESPONSE_ROOM_CLOSING:
@@ -641,6 +648,8 @@ void manage_server_play_state(void)
             default:
                 break;
         }
+
+        return;
     }
 
     if (bytes_received == 44)
@@ -652,6 +661,8 @@ void manage_server_play_state(void)
             memcpy(grid, buffer + sizeof(command) + sizeof(turn_token), sizeof(grid));
             printf("received playfield and turn %d\n", turn_token);
         }
+
+        return;
     }
 }
 

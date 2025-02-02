@@ -50,7 +50,7 @@ class Room:
             return 0
         if current_player == self.owner:
             return 1
-        if current_player == self.challenger:
+        if current_player == self.challenger[0]:
             return 2
         else:
             return 3
@@ -152,7 +152,7 @@ class Room:
             print("D")
 
             return False
-        if self.challenger is None:
+        if self.challenger == (None, None):
             print("E")
 
             return False
@@ -160,7 +160,7 @@ class Room:
             print("F")
 
             return False
-        if player != self.owner and player != self.challenger:
+        if player != self.owner and player != self.challenger[0]:
             print("G")
 
             return False
@@ -171,7 +171,7 @@ class Room:
         self.playfield[cell] = player
         self.winner = self.check_victory()
         self.draw = self.check_draw()
-        self.turn = self.challenger if self.turn == self.owner else self.owner
+        self.turn = self.challenger[0] if self.turn == self.owner else self.owner
         return True
 
 
@@ -382,6 +382,12 @@ class Server:
 
             packet = struct.pack("<11I", SERVER_GAME_PLAYFIELD_AND_TURN, 1, *playfield_assembled)
             self.socket.sendto(packet, room.challenger[1])
+        else:
+            print("TURN CORRUPTED!!!!")
+            print(room.turn)
+            print(room.owner)
+            print(room.challenger[0])
+
             
 
 
@@ -391,6 +397,7 @@ class Server:
                 print("Unknown player {}".format(sender))
                 return
             player = self.players[sender]
+            print(player)
             if not player.room:
                 print("Player {} ({}) is not in a room".format(sender, player.name))
                 return

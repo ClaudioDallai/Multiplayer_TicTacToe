@@ -18,9 +18,9 @@ int main (int argc, char **argv)
         switch (current_client_state)
         {
             case CONNECTION:
+                manage_server_join();
                 connection_process_input();
                 connection_draw();
-                manage_server_join();
                 break;
 
             case WAITING_ROOM:
