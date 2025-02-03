@@ -58,7 +58,8 @@ Rectangle target_room_id_button = {400.0f, 30.0f, 250.0f, 30.0f};
 
 
 
-// Init
+// Game management
+
 void game_init(void)
 {
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);

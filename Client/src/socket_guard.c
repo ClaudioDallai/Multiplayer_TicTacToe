@@ -11,7 +11,7 @@
 
 #include <stdio.h>
 
-// Implemento funzioni socket
+// Implement here socket function wrappers to prevent double include
 
 int s = -1;
 struct sockaddr_in send_sin;
