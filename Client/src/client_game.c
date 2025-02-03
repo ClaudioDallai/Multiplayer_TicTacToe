@@ -11,6 +11,7 @@
 const int screen_width = 800;
 const int screen_height = 600;
 const int target_fps = 60;
+const char* default_title = "Client TicTacToe";
 
 const int playfield_draw_offset = 100;
 
@@ -63,7 +64,7 @@ Rectangle target_room_id_button = {400.0f, 30.0f, 250.0f, 30.0f};
 void game_init(void)
 {
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
-    InitWindow(screen_width, screen_height, "Client TicTacToe");
+    InitWindow(screen_width, screen_height, default_title);
 
     InitAudioDevice();
     SetMasterVolume(master_volume_value);
@@ -113,6 +114,7 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
         {
             case CONNECTION:
                 deinit_client();
+                SetWindowTitle(default_title);
                 break;
             case WAITING_ROOM:
                 already_in_a_room = 0;
@@ -225,6 +227,7 @@ void manage_server_join(void)
     if (server_response == SERVER_RESPONSE_OK)
     {
         current_client_state = WAITING_ROOM;
+        SetWindowTitle(player_name);
     }
 }
 
