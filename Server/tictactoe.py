@@ -275,7 +275,22 @@ class Server:
     def server_response(self, client, response):
         packet = struct.pack("<I", response)
         self.socket.sendto(packet, client)
+
+    def close_completed_room(self, room):
+        self.server_response(self.rooms[room.room_id][1], SERVER_RESPONSE_ROOM_CLOSING)
+        self.server_response(room.challenger[1], SERVER_RESPONSE_ROOM_CLOSING)
+
+        room.challenger[0].last_packet_ts = time.time()
+        room.owner.last_packet_ts = time.time()
+        room.challenger[0].room = None
+        room.owner.room = None
+        room.owner = None
+        room.reset()
         
+        if room.room_id in self.rooms:
+            del self.rooms[room.room_id]
+            self.announces()
+
 
 # From Client - commands resolution
     def command_join_resolution(self, packet, sender):
@@ -394,11 +409,11 @@ class Server:
             self.playfield_turn_communication(player.room)
             if player.room.winner:
                 print("player {} from room {} did WON!".format(player.room.winner.name, player.room.room_id))
-                #player.room.reset()
+                self.close_completed_room(player.room)
                 return
             if player.room.draw:
                 print("Room {} ended in draw!".format(player.room.room_id))
-                #player.room.reset()
+                self.close_completed_room(player.room)
                 return
     
     def command_quit_resolution(self, packet, sender):
