@@ -53,8 +53,9 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
 void manage_application_exit(void);
 
 void load_assets(void);
-void internal_reset_pressed_buttons(void);
+void internal_reset_connection_pressed_buttons(void);
 void internal_reset_client_ids(void);
+void internal_reset_playfield(void);
 
 void connection_process_input(void);
 void connection_draw(void);
@@ -71,8 +72,8 @@ void manage_server_quit(void);
 void manage_server_waiting_rooms(void);
 void manage_server_play_state(void);
 
-void join_server(void);
 int receive_login_response_package(void);
+void join_server(void);
 void challenge_room(void);
 void create_server_room(void);
 void join_server_room(void);

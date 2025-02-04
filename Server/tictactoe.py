@@ -3,6 +3,8 @@ import struct
 import sys
 import time
 
+#region Commands
+
 LOWER_COMMAND_VALUE = 0
 UPPER_COMMAND_VALUE = 5
 
@@ -28,6 +30,7 @@ KICK_TIME = 120
 PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
 MAX_ROOMS = 10
 
+#endregion
 
 class Room:
 

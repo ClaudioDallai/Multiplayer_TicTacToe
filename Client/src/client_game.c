@@ -7,6 +7,9 @@
 #include "stdint.h"
 #include "string.h"
 
+
+#pragma region Properties
+
 // Const vars
 const int screen_width = 800;
 const int screen_height = 600;
@@ -21,7 +24,7 @@ const int screen_height_playfield = GRID_SIZE*CELL_SIZE;
 // Resources
 const char* font_path = "./resources/setback.png";
 
-// Client application related vars
+// Client application related vars such buttons and buffers
 int quit = 0;
 game_state current_client_state = CONNECTION;
 int turn_token = 0;
@@ -57,9 +60,10 @@ int target_room_id_index = 0;
 int target_room_id_text_pressed = 0;
 Rectangle target_room_id_button = {400.0f, 30.0f, 250.0f, 30.0f};
 
+#pragma endregion // Properties
 
 
-// Game management
+#pragma region Game_Management
 
 void game_init(void)
 {
@@ -86,23 +90,27 @@ void game_deinit(void)
     deinit_client();
 }
 
+#pragma endregion // Game_Management
 
 
-// Game Loop
+#pragma region Game_Loop
+
+
+#pragma region Generic_Methods
 
 void on_state_switch(const game_state previous_client_state, const game_state current_client_state, const int compute_current)
 {
     switch (previous_client_state)
     {
         case CONNECTION:
-            internal_reset_pressed_buttons();
-            // Maybe reset old chars* ...
+            internal_reset_connection_pressed_buttons();
             break;
         case WAITING_ROOM:
-            create_room_text_pressed = 0;
             internal_reset_client_ids();
             break;
         case PLAY:
+            already_in_a_room = 0;
+            turn_token = 0;
             break;
         default:
             break;
@@ -117,15 +125,10 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
                 SetWindowTitle(default_title);
                 break;
             case WAITING_ROOM:
-                already_in_a_room = 0;
-                turn_token = 0;
                 internal_reset_client_ids();
                 break;
             case PLAY:
-                for (int i = 0; i <= (GRID_SIZE * GRID_SIZE); i++)
-                {
-                    grid[i] = 0;
-                }
+                internal_reset_playfield();
                 break;
             default:
                 break;
@@ -133,49 +136,15 @@ void on_state_switch(const game_state previous_client_state, const game_state cu
     }
 }
 
-int receive_login_response_package(void)
+void internal_reset_playfield(void)
 {
-    char buffer[64]= {0};
-    int bytes_received = receive_packet(buffer, sizeof(buffer));
-    if(bytes_received >= 4) // At least a response was detected (integer)
+    for (int i = 0; i <= (GRID_SIZE * GRID_SIZE); i++)
     {
-        uint32_t command;
-        memcpy(&command, buffer, sizeof(command));
-
-        switch (command)
-        {
-            case SERVER_RESPONSE_OK:
-                if (bytes_received == 4)
-                {
-                    printf("Server response was OK: %u\n", command);
-                    return SERVER_RESPONSE_OK;
-                }
-                break;
-            case SERVER_RESPONSE_NEGATED:
-                if (bytes_received == 4)
-                {
-                    printf("Server response was NEGATED: %u\n", command);
-                    return SERVER_RESPONSE_NEGATED;
-                }
-                break;
-            case SERVER_RESPONSE_DEAD:
-                if(bytes_received == 4)
-                {
-                    printf("Server is DEAD: %u\n", command);
-                    return SERVER_RESPONSE_DEAD;
-                }
-                break;
-            default:
-                printf("Unknown command received: %u\n", command);
-                return -1;
-        }
+        grid[i] = 0;
     }
-    
-    return -1;
 }
 
-
-void internal_reset_pressed_buttons(void)
+void internal_reset_connection_pressed_buttons(void)
 {
     address_text_pressed = 0;
     port_text_pressed = 0;
@@ -189,15 +158,15 @@ void internal_reset_client_ids(void)
         client_room_ids[i] = 0;
     }
 
-    target_room_id_index = 0;
-    target_room_id_text_pressed = 0;
-
     for (int i = 0; i <= MAX_ROOM_ID_LENGHT; i++)
     {
         target_room_id[i] = '\0';
     }
-}
 
+    target_room_id_index = 0;
+    target_room_id_text_pressed = 0;
+    create_room_text_pressed = 0;
+}
 
 void manage_application_exit(void)
 {
@@ -212,7 +181,6 @@ void manage_application_exit(void)
     }
 }
 
-
 void manage_server_quit(void)
 {
     char buffer[8] = {0};
@@ -221,16 +189,57 @@ void manage_server_quit(void)
     send_packet(buffer, sizeof(buffer));
 }
 
+#pragma endregion // Generic_Methods
+
+#pragma region CONNECTION
+
+int receive_login_response_package(void)
+{
+    char buffer[64]= {0};
+    int bytes_received = receive_packet(buffer, sizeof(buffer));
+
+    if (bytes_received < 4 || bytes_received > 4) // I expect only a SERVER_RESPONSE (4 Byte) during CONNECTION
+    {
+        return -1;
+    }
+
+    uint32_t command;
+    memcpy(&command, buffer, sizeof(command));
+
+    switch (command)
+    {
+        case SERVER_RESPONSE_OK:
+            printf("Server response was OK: %u\n", command);
+            return SERVER_RESPONSE_OK;
+            break;
+        case SERVER_RESPONSE_NEGATED:
+            printf("Server response was NEGATED: %u\n", command);
+            return SERVER_RESPONSE_NEGATED;
+            break;
+        case SERVER_RESPONSE_DEAD:
+            printf("Server is DEAD: %u\n", command);
+            return SERVER_RESPONSE_DEAD;
+            break;
+        default:
+            printf("Unknown command received: %u\n", command);
+            return -1;
+    }
+    
+    return -1;
+}
+
 void manage_server_join(void)
 {
     int server_response = receive_login_response_package();
     if (server_response == SERVER_RESPONSE_OK)
     {
         current_client_state = WAITING_ROOM;
-        SetWindowTitle(player_name);
+
+        char waiting_room_title[64] = {0};
+        sprintf(waiting_room_title, "%s - Player name: %s", default_title, player_name);
+        SetWindowTitle(waiting_room_title);
     }
 }
-
 
 void connection_process_input(void)
 {
@@ -256,7 +265,7 @@ void connection_process_input(void)
     }
     else
     {
-        internal_reset_pressed_buttons();
+        internal_reset_connection_pressed_buttons();
     }
 
     int key= GetCharPressed();
@@ -326,7 +335,6 @@ void join_server(void)
     send_packet(buffer, sizeof(buffer));
 }
 
-
 void connection_draw(void)
 {
     BeginDrawing();
@@ -334,7 +342,6 @@ void connection_draw(void)
 
     DrawTextEx(font, "Insert IP, PORT, NAME to connect.", (Vector2){100, 80}, 30.0f, 1.0f, RED);
     DrawTextEx(font, "Hover them to write!", (Vector2){100, 130}, 30.0f, 1.0f, RED);
-
 
     if (address_text_pressed)
     {
@@ -369,14 +376,17 @@ void connection_draw(void)
         DrawTextEx(font, player_name, (Vector2){380, 350}, 30.0f, 5.0f, BUTTON_UNSELECTED);
     }
 
-
     EndDrawing();
 }
+
+#pragma endregion // CONNECTION
+
+#pragma region WAITING_ROOM
 
 void create_server_room(void)
 {
     printf("Ask for room creation\n");
-    char buffer[8] = {0}; 
+    char buffer[8] = {0};
     uint32_t create_room_command = COMMAND_CREATE_ROOM;
     memcpy(buffer, &create_room_command, sizeof(create_room_command));
     memcpy(buffer + sizeof(create_room_command), &create_room_command, sizeof(create_room_command)); 
@@ -418,7 +428,12 @@ void manage_server_waiting_rooms(void)
     {
         memcpy(&command, buffer, sizeof(command));
     }
+    else
+    {
+        return;
+    }
 
+    // SERVER_RESPONSE
     if (bytes_received == 4)
     {
         printf("Command: %u\n", command);
@@ -435,6 +450,7 @@ void manage_server_waiting_rooms(void)
         }
     }
 
+    // Room related SERVER_RESPONSE
     if(bytes_received == 8) 
     {
         printf("Command: %u\n", command);
@@ -461,6 +477,7 @@ void manage_server_waiting_rooms(void)
         }
     }
 
+    // Information about all available rooms
     if (bytes_received == ((4 * SERVER_MAX_ROOMS) + 4))
     {
         printf("Command: %u\n", command);
@@ -471,7 +488,6 @@ void manage_server_waiting_rooms(void)
         }
     }
 }
-
 
 void waiting_room_process_input(void)
 {
@@ -561,6 +577,10 @@ void waiting_room_draw(void)
     EndDrawing();
 }
 
+#pragma endregion // WAITING_ROOM
+
+#pragma region PLAY
+
 void play_process_input(void)
 {
     manage_application_exit();
@@ -584,8 +604,10 @@ void draw_grid_playfield(const int screen_width_playfield, const int screen_heig
     int cell_width = screen_width_playfield / GRID_SIZE;
     int cell_height = screen_height_playfield / GRID_SIZE;
 
-    for (int row = 0; row < GRID_SIZE; row++) {
-        for (int col = 0; col < GRID_SIZE; col++) {
+    for (int row = 0; row < GRID_SIZE; row++) 
+    {
+        for (int col = 0; col < GRID_SIZE; col++) 
+        {
             int x = col * cell_width + playfield_draw_offset;
             int y = row * cell_height;
             int index = row * GRID_SIZE + col;
@@ -636,7 +658,12 @@ void manage_server_play_state(void)
     {
         memcpy(&command, buffer, sizeof(command));
     }
+    else
+    {
+        return;
+    }
 
+    // SERVER RESPONSE and management of room (it is closed or this client was kicked)
     if (bytes_received == 4)
     {
         printf("Command: %u\n", command);
@@ -658,6 +685,7 @@ void manage_server_play_state(void)
         return;
     }
 
+    // Update Playfield
     if (bytes_received == 44)
     {
         printf("Command: %u\n", command);
@@ -687,3 +715,8 @@ void request_for_a_move(const int cell)
         printf("Not your Turn!\n");
     }
 }
+
+#pragma endregion // PLAY
+
+
+#pragma endregion // Game_Loop
