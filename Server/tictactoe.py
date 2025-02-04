@@ -3,7 +3,8 @@ import struct
 import sys
 import time
 
-#region Commands
+
+#region Server_Values
 
 LOWER_COMMAND_VALUE = 0
 UPPER_COMMAND_VALUE = 5
@@ -26,11 +27,15 @@ SERVER_RESPONSE_ROOM_CLOSING = 12
 SERVER_GAME_PLAYFIELD_AND_TURN = 13
 SERVER_GAME_END_RESULT = 14
 
+SOCKET_TIMEOUT_TIME = 1
 KICK_TIME = 120
 PASSIVE_ROOM_ANNOUNCEMENT_TIME = 5
 MAX_ROOMS = 10
 
-#endregion
+#endregion Commands
+
+
+#region Room_Class
 
 class Room:
 
@@ -64,7 +69,6 @@ class Room:
         for cell_index in range(len(self.playfield)):
             playfield_assembled[cell_index] = self.declare_symbol(cell_index)
         return playfield_assembled
-
 
     def reset(self):
         self.challenger = (None, None)
@@ -163,6 +167,10 @@ class Room:
         self.turn = self.challenger[0] if self.turn == self.owner else self.owner
         return True
 
+#endregion Room_Class
+
+
+#region Player_Class
 
 class Player:
 
@@ -171,6 +179,10 @@ class Player:
         self.room = None
         self.last_packet_ts = time.time()
 
+#endregion Player_Class
+
+
+#region Server_Class
 
 class Server:
 
@@ -190,9 +202,13 @@ class Server:
         }
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.settimeout(1)
+        self.socket.settimeout(SOCKET_TIMEOUT_TIME)
         self.socket.bind((address, port))
         print("Server ready: waiting for packets...")
+
+    def server_response(self, client, response):
+        packet = struct.pack("<I", response)
+        self.socket.sendto(packet, client)
 
     def kick(self, sender):
         bad_player = self.players[sender]
@@ -245,8 +261,7 @@ class Server:
 
         if room.room_id in self.rooms:
             del self.rooms[room.room_id]
-            self.announces()
-        
+            self.announces()    
 
     def remove_player(self, sender):
         print("PLAYER REMOVAL REQUESTED!")
@@ -265,7 +280,7 @@ class Server:
         
         if player == player.room.challenger[0]:
             print("Player challenger {} removed".format(player.name))
-            self.destroy_room(player.room.challenger[1], self.rooms[player.room.room_id][0])
+            self.destroy_room(player.room.challenger[1], self.rooms[player.room.room_id][0]) # Challenger in a room was kicked first
             del self.players[sender]
             return
         
@@ -273,11 +288,6 @@ class Server:
         print("Player owner {} removed".format(player.name))
         del self.players[sender]
         self.server_response(sender, SERVER_RESPONSE_KICK) # Room owner was kicked first
-
-
-    def server_response(self, client, response):
-        packet = struct.pack("<I", response)
-        self.socket.sendto(packet, client)
 
     def close_completed_room(self, room):
         self.server_response(self.rooms[room.room_id][1], SERVER_RESPONSE_ROOM_CLOSING)
@@ -295,7 +305,8 @@ class Server:
             self.announces()
 
 
-# From Client - commands resolution
+    # From Client - commands resolution
+
     def command_join_resolution(self, packet, sender):
         if len(packet) == 25:
             if sender in self.players:
@@ -312,8 +323,6 @@ class Server:
             self.server_response(sender, SERVER_RESPONSE_NEGATED)
             print("Join request packet size invalid: {}".format(len(packet)))
 
-            
-        
     def command_create_room_resolution(self, packet, sender):
         if len(packet) == 8:
             if sender not in self.players:
@@ -391,14 +400,12 @@ class Server:
         else:
             print("Turn corrupted - cannot notify players")
 
-
     def command_move_resolution(self, packet, sender):
         if len(packet) == 8:
             if sender not in self.players:
                 print("Unknown player {}".format(sender))
                 return
             player = self.players[sender]
-            print(player)
             if not player.room:
                 print("Player {} ({}) is not in a room".format(sender, player.name))
                 return
@@ -428,6 +435,8 @@ class Server:
             self.announces()
             return
         
+
+    # Server loop methods
 
     def tick(self):
         try:
@@ -490,6 +499,7 @@ class Server:
                 self.announces()
         
 
+    # Loop
     def run(self):
         while True:
             self.tick()
@@ -502,5 +512,9 @@ class Server:
             self.check_dead_peers()
 
 
+#endregion Server_Class
+
+
+# Run server on Local Host - 9999
 if __name__ == "__main__":
-    Server("127.0.0.1", 9999).run() # Immettere indirizzo ip di chi fa da server
+    Server("127.0.0.1", 9999).run()
